@@ -1,0 +1,21 @@
+{
+  "Pullups": "weighted_bodyweight",
+  "Chin-Up": "weighted_bodyweight",
+  "Mixed_Grip_Chin": "weighted_bodyweight",
+  "Wide-Grip_Rear_Pull-Up": "weighted_bodyweight",
+  "V-Bar_Pullup": "weighted_bodyweight",
+  "Band_Assisted_Pull-Up": "weighted_bodyweight",
+  "Weighted_Pull_Ups": "weighted_bodyweight",
+  "Parallel_Bar_Dip": "weighted_bodyweight",
+  "Dips_-_Chest_Version": "weighted_bodyweight",
+  "Dips_-_Triceps_Version": "weighted_bodyweight",
+  "Dip_Machine": "weight_reps",
+  "Weighted_Bench_Dip": "weighted_bodyweight",
+  "Bench_Dips": "weighted_bodyweight",
+  "Ring_Dips": "weighted_bodyweight",
+  "Muscle_Up": "weighted_bodyweight",
+  "Weighted_Crunches": "weighted_bodyweight",
+  "Weighted_Sit-Ups_-_With_Bands": "weighted_bodyweight",
+  "Weighted_Squat": "weight_reps",
+  "Plank": "timed"
+}

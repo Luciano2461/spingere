@@ -1,0 +1,71 @@
+/* Stile tipografico brutalista: colori pieni e piatti, un solo colore segnale, numeri grandi, linee sottili, blocchi squadrati. */
+:root {
+  --bg: #e9e6e1;
+  --surface: #f7f5f1;
+  --text: #0e0e0e;
+  --muted: #67625c;
+  --border: rgba(14, 14, 14, .16);
+  --line: rgba(14, 14, 14, .22);
+  --accent: #ea4b23;
+  --on-accent: #0e0e0e;
+  /* blocchi pieni per le liste in evidenza (sempre testo scuro sopra) */
+  --block-1: #ea4b23;
+  --block-2: #f7f3ea;
+  --block-3: #cfc5b8;
+  --block-4: #a8998a;
+  --on-block: #0e0e0e;
+  --ink: #0e0e0e; /* pulsanti e barra neri */
+  --on-ink: #f7f5f1;
+  --danger: #b8210a;
+  --on-danger: #fff;
+  --ok: #1f6f30;
+  --warn: #8a5300;
+  --on-warn: #fff;
+  --tabbar-h: 76px;
+  --dock: calc(var(--tabbar-h) + env(safe-area-inset-bottom) * .6);
+  --r: 0px;
+  --r-sm: 0px;
+  --pill: 999px;
+  --font: 'Helvetica Neue', Helvetica, -apple-system, BlinkMacSystemFont, system-ui, Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000;
+    --surface: #131313;
+    --text: #f2efea;
+    --muted: #8f8a84;
+    --border: rgba(242, 239, 234, .16);
+    --line: rgba(242, 239, 234, .24);
+    --block-2: #ece7dd;
+    --block-3: #bfb4a6;
+    --block-4: #8d7f71;
+    --ink: #f2efea;
+    --on-ink: #0e0e0e;
+    --danger: #ff6a4a;
+    --on-danger: #0e0e0e;
+    --ok: #5fcf75;
+    --warn: #e0a84a;
+    --on-warn: #0e0e0e;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { height: 100%; background: var(--bg); color: var(--text); }
+body {
+  margin: 0; height: 100%; color: var(--text);
+  font: 16px/1.4 var(--font);
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+  font-variant-numeric: tabular-nums;
+}
+#app { height: 100%; }
+button { font: inherit; color: inherit; min-height: 44px; }
+/* Titoli: grandi, compatti, a sinistra. */
+h1 { font-size: 2.6rem; line-height: .95; font-weight: 700; letter-spacing: -.045em; margin: .4rem 0 1rem; }
+h1 .sub, h1 small { display: block; color: var(--muted); font-weight: 700; font-size: inherit; }
+/* Etichetta piccola in monospace, maiuscola (stile «indice»). */
+.eyebrow { font-family: var(--mono); font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+/* Numeri protagonisti. */
+.bignum { font-size: 3rem; line-height: .9; font-weight: 700; letter-spacing: -.05em; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
