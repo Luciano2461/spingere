@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ask } from '../ui/confirm.svelte'
   import { onMount } from 'svelte'
   import { applyImport, collectBackup, previewImport, type ImportPreview } from '../db/backup'
   import { db } from '../db/db'
@@ -75,7 +76,7 @@
 
   async function doImport() {
     if (!backup || !preview) return
-    if (mode === 'replace' && !confirm(`Sostituire tutto? Verranno cancellate ${pl(preview.local.plans, 'scheda', 'schede')} e ${pl(preview.local.sessions, 'allenamento', 'allenamenti')} presenti su questo dispositivo, e sostituiti con quelli del file.`)) return
+    if (mode === 'replace' && !(await ask(`Sostituire tutto? Verranno cancellate ${pl(preview.local.plans, 'scheda', 'schede')} e ${pl(preview.local.sessions, 'allenamento', 'allenamenti')} presenti su questo dispositivo, e sostituiti con quelli del file.`, { confirmLabel: 'Sostituisci tutto' }))) return
     importing = true
     importErr = ''
     try {

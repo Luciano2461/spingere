@@ -106,6 +106,7 @@ export interface ImportRow {
   planName: string
   dayName: string
   name: string
+  nameEn?: string // nome inglese facoltativo: aiuta ad abbinare l'esercizio del database
   typeHint?: ExerciseType
   sets?: number
   reps?: number
@@ -117,12 +118,13 @@ export interface ImportRow {
   warnings: string[]
 }
 
-export type Field = 'plan' | 'day' | 'name' | 'type' | 'sets' | 'reps' | 'seconds' | 'weight' | 'rest' | 'group' | 'notes'
+export type Field = 'plan' | 'day' | 'name' | 'nameEn' | 'type' | 'sets' | 'reps' | 'seconds' | 'weight' | 'rest' | 'group' | 'notes'
 
 const HEADERS: Record<Field, string[]> = {
   plan: ['scheda', 'programma'],
   day: ['giorno', 'allenamento', 'seduta', 'day'],
   name: ['esercizio', 'nome', 'nome esercizio'],
+  nameEn: ['nome inglese', 'esercizio inglese', 'inglese', 'english', 'english name', 'esercizio en'],
   type: ['tipo'],
   sets: ['serie', 'set', 'sets'],
   reps: ['ripetizioni', 'rip', 'reps'],
@@ -140,7 +142,7 @@ export function headerField(cell: string): Field | null {
   return (Object.keys(HEADERS) as Field[]).find((f) => HEADERS[f].includes(h)) ?? null
 }
 
-export const TEMPLATE_COLUMNS = ['scheda', 'giorno', 'esercizio', 'tipo', 'serie', 'ripetizioni', 'secondi', 'carico', 'recupero', 'superserie', 'note']
+export const TEMPLATE_COLUMNS = ['scheda', 'giorno', 'esercizio', 'nome inglese', 'tipo', 'serie', 'ripetizioni', 'secondi', 'carico', 'recupero', 'superserie', 'note']
 
 export interface TableResult {
   rows: ImportRow[]
@@ -182,6 +184,7 @@ export function tableToRows(table: string[][]): TableResult {
       planName: planName || DEFAULT_PLAN_NAME,
       dayName: dayName || DEFAULT_DAY_NAME,
       name,
+      nameEn: cell(r, 'nameEn') || undefined,
       typeHint: take(parseTypeHint(cell(r, 'type')), 'Tipo'),
       sets: take(parseNumber(cell(r, 'sets')), 'Serie'),
       reps: take(parseNumber(cell(r, 'reps')), 'Ripetizioni'),
@@ -207,46 +210,131 @@ export interface MatchResult {
 }
 
 const MAX_CANDIDATES = 5
-const STOPWORDS = new Set(['con', 'di', 'a', 'al', 'alla', 'da', 'il', 'la', 'in', 'e'])
+const STOPWORDS = new Set(['con', 'di', 'a', 'al', 'alla', 'allo', 'ai', 'agli', 'alle', 'da', 'dal', 'dalla', 'il', 'lo', 'la', 'le', 'i', 'gli', 'in', 'e', 'su', 'sul', 'sulla', 'sui', 'del', 'della', 'dei', 'per', 'the', 'with', 'on'])
 
 /** Punteggio massimo possibile per una ricerca di n parole (serve a stimare quanto è sicuro un abbinamento). */
 const maxScore = (n: number) => 3 * n + 2 + 1.5
 
-function rank(query: string, exercises: Exercise[], options: SearchOptions): { exercise: Exercise; score: number }[] {
+/**
+ * Nome importato ripulito da ciò che non è il nome: numerazione («1.», «A)»), inclinazioni («30°»), serie×ripetizioni («4x8»),
+ * carichi e recuperi scritti nella stessa cella. Se non resta niente si tiene il nome com'era.
+ */
+export function cleanImportName(raw: string): string {
+  let s = raw.toLowerCase()
+  // «panca 30°», «spinte manubri panca 45»: i gradi indicano la panca inclinata
+  if (/\b(panca|spinte|distensioni|croci|chest press|bench)\b/.test(s) && /\d+\s*(°|gradi\b)|\bpanca\s+\d+\b/.test(s) && !/inclinat|declinat/.test(s)) s += ' inclinata'
+  s = s
+    .replace(/^\s*(\d{1,2}|[a-z])\s*[.)\]:-]\s+/, '')
+    .replace(/\b(rec|recupero|riposo|pausa)\b.*$/, '')
+    .replace(/\d+\s*(°|gradi\b)/g, ' ')
+    .replace(/\b\d+\s*[x×*]\s*\d+(\s*[-/]\s*\d+)*\b/g, ' ')
+    .replace(/\b\d+([.,]\d+)?\s*(kg|s|sec|min|')?(?=\s|$)/g, ' ')
+  return normalize(s) || normalize(raw)
+}
+
+/** Parole che indicano l'attrezzo: in una scheda si scrivono spesso senza «con» («alzate laterali manubri»). */
+const EQUIPMENT_WORDS: Record<string, string> = {
+  manubri: 'dumbbell', manubrio: 'dumbbell', db: 'dumbbell', dumbbell: 'dumbbell', dumbbells: 'dumbbell',
+  bilanciere: 'barbell', bb: 'barbell', barbell: 'barbell',
+  cavi: 'cable', cavo: 'cable', cable: 'cable', cables: 'cable',
+  macchina: 'machine', machine: 'machine', macchinario: 'machine',
+  kettlebell: 'kettlebells', kb: 'kettlebells',
+  elastico: 'bands', elastici: 'bands', band: 'bands', bands: 'bands',
+}
+
+/** Varianti particolari: finiscono in fondo se la scheda non le nomina. */
+const EXOTIC = ['elastic', 'catene', 'chains', 'bands', 'fitball', 'exercise ball', 'bosu', 'powerlifting', 'kettlebell', 'palla medica', 'medicine ball', 'trx', 'anelli', 'a leve', 'leverage', 'jefferson', 'zercher', 'ghigliottina', 'guillotine', 'pin', 'board', 'isometric']
+
+function rankImport(name: string, exercises: Exercise[], searchOptions: SearchOptions): { exercise: Exercise; score: number }[] {
+  const options = { ...searchOptions, wholeWords: true }
+  const words = name.split(' ').filter((w) => w && !STOPWORDS.has(w))
+  const equip = words.filter((w) => w in EQUIPMENT_WORDS)
+  const core = words.filter((w) => !(w in EQUIPMENT_WORDS))
+  const query = (core.length ? core : words).join(' ')
+  const common = searchOptions.commonNames?.[words.join(' ')] ?? searchOptions.commonNames?.[name] // il nome comune vince sulla somiglianza
   const out: { exercise: Exercise; score: number }[] = []
   for (const exercise of exercises) {
     if (exercise.deleted) continue
-    const score = matchScore(exercise, query, options)
+    // tutte le parole nel nome: vale di più; altrimenti l'attrezzo può corrispondere al solo campo «attrezzo»
+    const full = equip.length ? matchScore(exercise, words.join(' '), options) : 0
+    let score = full > 0 ? full + 1.5 * equip.length : matchScore(exercise, query, options)
+    if (exercise.id === common) score = Math.max(score, 1) + 4
+    if (score <= 0) continue
+    if (full <= 0) for (const w of equip) score += exercise.equipment === EQUIPMENT_WORDS[w] ? 0.5 : -2
+    const text = normalize(`${exercise.name} ${exercise.nameOriginal ?? ''}`)
+    for (const x of EXOTIC) if (` ${text} `.includes(` ${x} `) && !` ${name} `.includes(` ${x} `)) score -= 1.5
     if (score > 0) out.push({ exercise, score })
   }
   return out.sort((a, b) => b.score - a.score || a.exercise.name.localeCompare(b.exercise.name, 'it'))
 }
 
-/** Propone gli esercizi del database per un nome importato. «sure» solo se il nome coincide o vince con netto margine. */
-export function matchExercise(name: string, exercises: Exercise[], options: SearchOptions = {}): MatchResult {
-  const norm = normalize(name)
+/** Sottoinsiemi di n parole, nell'ordine originale (al massimo qualche decina: i nomi sono corti). */
+function subsetsOf(words: string[], n: number): string[][] {
+  if (words.length > 8) return [words.slice(0, n)]
+  const out: string[][] = []
+  const walk = (start: number, acc: string[]) => {
+    if (acc.length === n) return void out.push(acc)
+    for (let i = start; i <= words.length - (n - acc.length); i++) walk(i + 1, [...acc, words[i]])
+  }
+  walk(0, [])
+  return out
+}
+
+const STATUS_RANK: Record<MatchResult['status'], number> = { sure: 3, check: 2, weak: 1, none: 0 }
+
+/**
+ * Propone gli esercizi del database per un nome importato. «sure» solo se il nome coincide (anche con un nome personale,
+ * un nome comune da palestra o il nome inglese) o vince con netto margine. `english` è il nome inglese facoltativo della riga.
+ */
+export function matchExercise(name: string, exercises: Exercise[], options: SearchOptions = {}, english?: string): MatchResult {
+  const it = matchOne(name, exercises, options)
+  if (!english?.trim() || it.status === 'sure') return it
+  const en = matchOne(english, exercises, options)
+  if (STATUS_RANK[en.status] > STATUS_RANK[it.status]) return en
+  if (en.best && it.best && en.best.id === it.best.id && it.status === 'check') return { ...it, status: 'sure' } // i due nomi concordano
+  return it
+}
+
+function matchOne(raw: string, exercises: Exercise[], options: SearchOptions): MatchResult {
+  const norm = cleanImportName(raw)
   if (!norm) return { status: 'none', candidates: [] }
 
-  // nome identico (esercizio o nome personale)
-  const exact = exercises.filter((e) => !e.deleted && [e.name, ...(options.aliases?.get(e.id) ?? [])].some((t) => normalize(t) === norm))
-  if (exact.length === 1) return { status: 'sure', best: exact[0], candidates: [exact[0]] }
+  // nome identico: prima i nomi corretti dall'utente, poi i nomi comuni da palestra, poi nome italiano e inglese del database
+  const live = exercises.filter((e) => !e.deleted)
+  const byUser = live.filter((e) => (options.aliases?.get(e.id) ?? []).some((t) => normalize(t) === norm))
+  const commonId = options.commonNames?.[norm]
+  const byCommon = byUser.length ? [] : live.filter((e) => e.id === commonId)
+  let exact = byUser.length ? byUser : byCommon
+  if (exact.length === 0) {
+    exact = live.filter((e) => normalize(e.name) === norm)
+    if (exact.length === 0) exact = live.filter((e) => e.nameOriginal && normalize(e.nameOriginal) === norm)
+  }
+  if (exact.length === 1) return { status: 'sure', best: exact[0], candidates: [exact[0], ...rankImport(norm, exercises, options).map((r) => r.exercise).filter((e) => e.id !== exact[0].id)].slice(0, MAX_CANDIDATES) }
   if (exact.length > 1) return { status: 'check', best: exact[0], candidates: exact.slice(0, MAX_CANDIDATES) }
 
-  const words = norm.split(' ')
-  const ranked = rank(name, exercises, options)
+  const words = norm.split(' ').filter((w) => !STOPWORDS.has(w))
+  const ranked = rankImport(norm, exercises, options)
   if (ranked.length > 0) {
     const [first, second] = ranked
     // «sicuro» solo se l'esercizio non ha più di una parola in più del nome cercato (altrimenti è un'altra variante: da controllare)
-    const extraWords = normalize(first.exercise.name).split(' ').length - words.length
+    const bare = (t: string) => normalize(t.replace(/\([^)]*\)/g, ' ')).split(' ').filter((w) => !STOPWORDS.has(w)).length
+    const extraWords = bare(first.exercise.name) - words.length
     const strong = extraWords <= 1 && first.score >= maxScore(words.length) * 0.8 && (!second || first.score - second.score >= 0.5)
     return { status: strong ? 'sure' : 'check', best: first.exercise, candidates: ranked.slice(0, MAX_CANDIDATES).map((r) => r.exercise) }
   }
 
-  // nessuna corrispondenza completa: si prova togliendo parole (prima le meno importanti, poi le ultime)
-  const core = words.filter((w) => !STOPWORDS.has(w))
-  for (let n = core.length - 1; n >= 1; n--) {
-    const partial = rank(core.slice(0, n).join(' '), exercises, options)
-    if (partial.length > 0) return { status: 'weak', best: partial[0].exercise, candidates: partial.slice(0, MAX_CANDIDATES).map((r) => r.exercise) }
+  // nessuna corrispondenza completa: si prova togliendo parole (meno parole tolte = meglio). Se resta la maggior parte del nome
+  // l'esercizio trovato è proposto «da controllare», altrimenti è solo un suggerimento («weak»)
+  for (let n = words.length - 1; n >= 1; n--) {
+    let best: { exercise: Exercise; score: number }[] = []
+    for (const subset of subsetsOf(words, n)) {
+      const partial = rankImport(subset.join(' '), exercises, options)
+      if (partial.length && (!best.length || partial[0].score > best[0].score)) best = partial
+    }
+    if (best.length) {
+      const status = n >= 2 && n / words.length >= 0.6 ? 'check' : 'weak'
+      return { status, best: best[0].exercise, candidates: best.slice(0, MAX_CANDIDATES).map((r) => r.exercise) }
+    }
   }
   return { status: 'none', candidates: [] }
 }
@@ -280,7 +368,7 @@ export function guessType(row: ImportRow): ExerciseType {
 
 export function buildReview(rows: ImportRow[], exercises: Exercise[], options: SearchOptions = {}): ReviewItem[] {
   return rows.map((row) => {
-    const match = matchExercise(row.name, exercises, options)
+    const match = matchExercise(row.name, exercises, options, row.nameEn)
     return { row, match, choice: initialChoice(row, match), manual: false }
   })
 }
@@ -382,17 +470,65 @@ function aliasesToAdd(items: ReviewItem[], existing: Alias[]): Alias[] {
   return out
 }
 
+// ---------- Testo incollato e istruzioni per un'AI ----------
+
+/**
+ * Testo incollato (es. la risposta di un'AI): se c'è un blocco di codice ``` si usa quello con le intestazioni; si scartano le frasi
+ * prima delle intestazioni e quelle dopo la tabella (righe senza separatori).
+ */
+export function pastedTable(text: string): string[][] {
+  const clean = text.replace(/^\uFEFF/, '')
+  const blocks = [...clean.matchAll(/```[^\n]*\n([\s\S]*?)(```|$)/g)].map((m) => m[1])
+  const isHeader = (l: string) => parseCsv(l)[0]?.some((c) => headerField(c) === 'name') ?? false
+  const source = blocks.find((b) => b.split(/\r?\n/).some(isHeader)) ?? clean
+  const lines = source.split(/\r?\n/)
+  const start = Math.max(0, lines.findIndex(isHeader))
+  const body = lines.slice(start).filter((l, i) => i === 0 || l.trim() === '' || /[;,\t]/.test(l))
+  return parseCsv(body.join('\n').trim())
+}
+
+/** Istruzioni da incollare in un'intelligenza artificiale (ChatGPT, Claude, Gemini…) insieme alla propria scheda, per ottenere un CSV che l'app legge bene. */
+export function aiInstructions(): string {
+  return [
+    "Converti la scheda di allenamento che ti allego (PDF, foto o testo) in un CSV da importare nell'app Spingere. Segui queste regole alla lettera.",
+    '',
+    'FORMATO',
+    `- Prima riga, esattamente: ${TEMPLATE_COLUMNS.join(';')}`,
+    '- Separatore punto e virgola (;). Una riga per esercizio, nello stesso ordine della scheda. Niente righe vuote, titoli o totali.',
+    '- Se un valore contiene un punto e virgola, mettilo tra virgolette.',
+    '',
+    'COLONNE',
+    '- scheda: il nome della scheda, solo nella prima riga (poi lascia vuoto).',
+    '- giorno: il nome del giorno o della seduta (es. «Giorno A», «Push», «Lunedì»), nella prima riga di ogni giorno; nelle righe successive dello stesso giorno lascia vuoto.',
+    '- esercizio: nome italiano completo e standard, con l\'attrezzo (es. «Panca piana con bilanciere», «Rematore con manubrio», «Lat machine presa larga», «Leg press»). Correggi gli errori di battitura. Non scrivere nel nome serie, ripetizioni, gradi, carichi o note.',
+    '- nome inglese: il nome inglese standard dello stesso esercizio, come nei database di esercizi (es. «Barbell Bench Press», «One-Arm Dumbbell Row», «Wide-Grip Lat Pulldown», «Seated Cable Rows», «Lying Leg Curls»).',
+    '- tipo: una sola di queste parole: carico (pesi, macchine, cavi), corpo libero, zavorra (a corpo libero con zavorra o assistenza), tempo (esercizi a tempo, es. plank), cardio.',
+    '- serie: numero intero.',
+    '- ripetizioni: numero intero oppure intervallo (es. 8-10). Se cambiano da serie a serie (es. 12/10/8) scrivi il numero più alto e riporta lo schema nelle note. Per «a cedimento» o «max» lascia vuoto e scrivilo nelle note.',
+    '- secondi: solo per esercizi a tempo e cardio: la durata di una serie in secondi (10 minuti = 600).',
+    '- carico: i kg di una serie, solo il numero (es. 60 oppure 12,5). Se è in libbre convertilo in kg. Vuoto se non è indicato.',
+    '- recupero: in secondi (es. 90). Vuoto se non è indicato.',
+    '- superserie: la stessa lettera (A, B, C…) per gli esercizi consecutivi da fare in superserie; «circuito 1», «circuito 2»… per i circuiti; altrimenti vuoto. Il recupero dell\'ultimo esercizio del gruppo è quello dopo il giro.',
+    '- note: indicazioni tecniche, tempo di esecuzione, RPE/RIR, piramidali, drop set, varianti.',
+    '',
+    'ALTRO',
+    '- Riscaldamento e defaticamento con una durata (es. 10 minuti di tapis roulant) vanno come cardio con i secondi; il resto senza serie né durata lascialo fuori.',
+    '- Non inventare: se qualcosa non è chiaro, lascia vuoto e spiegalo nelle note.',
+    '- Rispondi solo con il CSV dentro un unico blocco di codice, senza commenti prima o dopo.',
+  ].join('\n')
+}
+
 // ---------- Template ----------
 
 /** Template CSV (separatore `;` e BOM, così Excel italiano lo apre in colonne) con un esempio completo. */
 export function templateCsv(): string {
   const rows = [
     TEMPLATE_COLUMNS,
-    ['La mia scheda', 'Push', 'Panca piana con bilanciere', 'carico', '4', '8', '', '60', '2:00', '', ''],
-    ['', '', 'Croci ai cavi', 'carico', '3', '12', '', '15', '60', 'A', 'Superserie con le alzate'],
-    ['', '', 'Alzate laterali', 'carico', '3', '15', '', '8', '60', 'A', ''],
-    ['', 'Gambe', 'Squat con bilanciere', 'carico', '4', '6', '', '80', '2:30', '', ''],
-    ['', '', 'Plank', 'tempo', '3', '', '45', '', '60', '', ''],
+    ['La mia scheda', 'Push', 'Panca piana con bilanciere', 'Barbell Bench Press', 'carico', '4', '8', '', '60', '2:00', '', ''],
+    ['', '', 'Croci ai cavi', 'Cable Crossover', 'carico', '3', '12', '', '15', '60', 'A', 'Superserie con le alzate'],
+    ['', '', 'Alzate laterali', 'Side Lateral Raise', 'carico', '3', '15', '', '8', '60', 'A', ''],
+    ['', 'Gambe', 'Squat con bilanciere', 'Barbell Squat', 'carico', '4', '6', '', '80', '2:30', '', ''],
+    ['', '', 'Plank', 'Plank', 'tempo', '3', '', '45', '', '60', '', ''],
   ]
   const esc = (c: string) => (/[;"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)
   return '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n') + '\r\n'

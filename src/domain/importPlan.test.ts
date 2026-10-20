@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import data from '../data/exercises.json'
+import commonNamesJson from '../data/common-names.json'
+import synonymsJson from '../data/synonyms.json'
 import {
-  buildImport, buildReview, detectDelimiter, initialChoice, matchExercise, parseCsv, parseDuration, parseNumber, parseTypeHint, tableToRows, templateCsv,
+  aiInstructions, buildImport, buildReview, cleanImportName, detectDelimiter, pastedTable, headerField, initialChoice, matchExercise, parseCsv, parseDuration, parseNumber, parseTypeHint, tableToRows, templateCsv,
   type Choice,
 } from './importPlan'
 import type { Exercise } from './types'
 
 const all = data.exercises as Exercise[]
+const commonNames = commonNamesJson as Record<string, string>
+const synonymGroups = synonymsJson as string[][]
 const byId = (id: string) => all.find((e) => e.id === id)!
 
 describe('CSV', () => {
@@ -185,5 +189,55 @@ describe('costruzione delle schede', () => {
     expect(r.aliases).toHaveLength(1)
     expect(r.aliases[0]).toMatchObject({ exerciseId: 'b:barbell-deadlift', text: 'Il mio stacco' })
     expect(buildImport(manual, 90, [{ id: 'x', exerciseId: 'b:barbell-deadlift', text: 'il mio STACCO' }]).aliases).toEqual([])
+  })
+})
+
+describe('nomi importati e AI', () => {
+  it('ripulisce numerazione, gradi, serie×ripetizioni, carichi e recuperi', () => {
+    expect(cleanImportName('1. Panca inclinata 30° 4x8 60kg rec 90"')).toBe('panca inclinata')
+    expect(cleanImportName('A) Squat 5 x 5')).toBe('squat')
+    expect(cleanImportName('Leg press 45 gradi')).toBe('leg press')
+    expect(cleanImportName('Panca 30° manubri')).toBe('panca manubri inclinata') // i gradi indicano la panca inclinata
+    expect(cleanImportName('4x8')).toBe('4x8') // se non resta niente si tiene il nome
+  })
+  it('l\'attrezzo scritto senza «con» e il nome inglese aiutano l\'abbinamento', () => {
+    expect(matchExercise('Squat bilanciere', all).best?.id).toBe('b:barbell-squat')
+    expect(matchExercise('Esercizio sconosciuto', all, {}, 'Barbell Squat')).toMatchObject({ status: 'sure', best: { id: 'b:barbell-squat' } })
+  })
+  it('le intestazioni scritte nelle istruzioni per l\'AI sono tutte riconosciute', () => {
+    const header = aiInstructions().split('\n').find((l) => l.startsWith('- Prima riga'))!.split(': ')[1]
+    expect(header.split(';').every((c) => headerField(c) !== null)).toBe(true)
+  })
+  it('legge il CSV incollato dalla risposta di un\'AI, con blocco di codice e frasi attorno', () => {
+    const text = 'Ecco il CSV:\n```csv\nscheda;giorno;esercizio;nome inglese;serie\nA;Push;Panca piana;Barbell Bench Press;4\n```\nFammi sapere se vuoi modifiche!'
+    const t = pastedTable(text)
+    expect(t[0][2]).toBe('esercizio')
+    expect(tableToRows(t)).toMatchObject({ problems: [], rows: [{ name: 'Panca piana', nameEn: 'Barbell Bench Press', sets: 4 }] })
+    expect(tableToRows(pastedTable('esercizio,serie\nSquat,5\n\nBuon allenamento!')).rows).toHaveLength(1) // senza blocco di codice
+  })
+})
+
+describe('nomi comuni da palestra', () => {
+  const ids = new Set(all.map((e) => e.id))
+  const opts = { synonyms: synonymGroups, commonNames }
+  it('ogni voce porta a un esercizio esistente ed è scritta come la cerca l\'import', () => {
+    for (const [key, id] of Object.entries(commonNames)) {
+      expect(ids.has(id), `${key} → ${id}`).toBe(true)
+      expect(cleanImportName(key), key).toBe(key)
+    }
+  })
+  it('i nomi da palestra più comuni vengono abbinati con sicurezza all\'esercizio base', () => {
+    const cases: [string, string][] = [
+      ['Panca piana', 'b:barbell-bench-press-medium-grip'], ['Squat', 'b:barbell-squat'], ['Pulley basso', 'b:seated-cable-rows'],
+      ['Lat machine avanti', 'b:wide-grip-lat-pulldown'], ['Stacchi rumeni', 'b:romanian-deadlift'], ['Dip', 'b:parallel-bar-dip'],
+    ]
+    for (const [name, id] of cases) expect(matchExercise(name, all, opts), name).toMatchObject({ status: 'sure', best: { id } })
+  })
+  it('un nome corretto a mano dall\'utente vince sul dizionario', () => {
+    const m = matchExercise('Panca piana', all, { ...opts, aliases: new Map([['b:dumbbell-bench-press', ['panca piana']]]) })
+    expect(m.best?.id).toBe('b:dumbbell-bench-press')
+  })
+  it('se resta la maggior parte del nome propone l\'esercizio da controllare', () => {
+    expect(matchExercise('Chest press seduto', all, opts)).toMatchObject({ status: 'check', best: { id: 'b:machine-bench-press' } })
   })
 })

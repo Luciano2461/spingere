@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ask } from '../../ui/confirm.svelte'
   import { onMount } from 'svelte'
   import { liveQuery } from 'dexie'
   import { db } from '../../db/db'
@@ -35,7 +36,7 @@
   const forgotten = $derived(active ? isForgotten(active.startedAt) : false)
 
   async function discardForgotten() {
-    if (!active || !confirm('Eliminare questo allenamento? Quello che hai registrato andrà perso.')) return
+    if (!active || !(await ask('Eliminare questo allenamento? Quello che hai registrato andrà perso.', { confirmLabel: 'Elimina allenamento' }))) return
     await discardSession(db, active.id)
     clearActive()
   }

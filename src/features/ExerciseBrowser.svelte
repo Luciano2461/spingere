@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ask } from '../ui/confirm.svelte'
   import { onMount } from 'svelte'
   import { liveQuery } from 'dexie'
   import { db } from '../db/db'
@@ -12,6 +13,7 @@
   import { deleteCustomExercise } from '../db/exercises'
   import { isCustom } from '../domain/customExercise'
   import synonyms from '../data/synonyms.json'
+  import commonNames from '../data/common-names.json'
 
   // Se `onselect` è passato (es. dal selettore di una scheda) il tocco sceglie l'esercizio invece di aprire il dettaglio.
   let { onselect }: { onselect?: (exercise: Exercise) => void } = $props()
@@ -29,7 +31,7 @@
   let formFor = $state<{ exercise?: Exercise } | null>(null)
   let thumbs = $state(new Map<string, string>())
 
-  const results = $derived(searchExercises(all, { query, muscle, equipment }, { synonyms, aliases }))
+  const results = $derived(searchExercises(all, { query, muscle, equipment }, { synonyms, aliases, commonNames }))
   const shown = $derived(results.slice(0, limit))
   const untranslated = $derived(all.filter((e) => e.needsTranslation).length)
 
@@ -72,7 +74,7 @@
   })
 
   async function removeCustom(e: Exercise) {
-    if (!confirm(`Eliminare «${e.name}»? Non comparirà più nelle ricerche; allenamenti già fatti, record e schede esistenti restano com'erano.`)) return
+    if (!(await ask(`Eliminare «${e.name}»? Non comparirà più nelle ricerche; allenamenti già fatti, record e schede esistenti restano com'erano.`, { confirmLabel: 'Elimina esercizio' }))) return
     await deleteCustomExercise(db, e.id)
     openId = null
   }
@@ -107,6 +109,7 @@
       <button class="item" onclick={() => (onselect ? onselect(e) : (openId = openId === e.id ? null : e.id))}>
         {#if thumbs.get(e.id)}<img class="thumb" src={thumbs.get(e.id)} alt="" />{/if}
         <span class="name">{e.name}</span>
+        {#if e.nameOriginal && e.nameOriginal !== e.name}<span class="en" lang="en">{e.nameOriginal}</span>{/if}
         <span class="meta">{e.primaryMuscles.map(muscleLabel).join(', ') || '—'} · {equipmentLabel(e.equipment)}</span>
       </button>
       {#if !onselect && openId === e.id}
@@ -122,7 +125,7 @@
             <dt>Muscoli principali</dt><dd>{e.primaryMuscles.map(muscleLabel).join(', ') || '—'}</dd>
             {#if e.secondaryMuscles.length}<dt>Secondari</dt><dd>{e.secondaryMuscles.map(muscleLabel).join(', ')}</dd>{/if}
             <dt>Attrezzo</dt><dd>{equipmentLabel(e.equipment)}</dd>
-            {#if e.nameOriginal && e.nameOriginal !== e.name}<dt>Nome originale</dt><dd>{e.nameOriginal}</dd>{/if}
+            {#if e.nameOriginal && e.nameOriginal !== e.name}<dt>Nome inglese</dt><dd>{e.nameOriginal}</dd>{/if}
           </dl>
           <ExerciseAliases exerciseId={e.id} />
         </div>
@@ -167,6 +170,7 @@
   li { background: var(--surface); border: 0; border-radius: 0; overflow: hidden; }
   .item { width: 100%; display: grid; gap: 2px; text-align: left; padding: .6rem .9rem; background: none; border: 0; }
   .name { font-weight: 600; }
+  .en { color: var(--muted); font-size: .8rem; font-style: italic; }
   .meta { color: var(--muted); font-size: .8rem; }
   .detail { padding: 0 .9rem .9rem; }
   .change { margin: .5rem 0; padding: 0 .9rem; border: 1.5px solid var(--text); border-radius: var(--pill); background: transparent; color: var(--text); font-weight: 700; }

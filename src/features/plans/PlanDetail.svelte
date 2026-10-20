@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ask } from '../../ui/confirm.svelte'
   import { onMount } from 'svelte'
   import { db } from '../../db/db'
   import { arrayMove, duplicatePlan, newDay, touch } from '../../domain/plan'
@@ -10,6 +11,7 @@
   let plan = $state<Plan | null>(null)
   let missing = $state(false)
   let dayName = $state('')
+  let deleteError = $state('')
 
   onMount(async () => {
     const found = await db.plans.get(planId)
@@ -32,8 +34,8 @@
   }
 
   async function removeDay(id: string, name: string) {
-    if (!plan || !confirm(`Eliminare il giorno «${name}» e i suoi esercizi? Lo storico degli allenamenti già fatti non cambia.`)) return
-    await commit({ ...plan, days: plan.days.filter((d) => d.id !== id) })
+    if (!plan || !(await ask(`Eliminare il giorno «${name}» e i suoi esercizi? Lo storico degli allenamenti già fatti non cambia.`, { confirmLabel: 'Elimina giorno' }))) return
+    await commit({ ...plan!, days: plan!.days.filter((d) => d.id !== id) })
   }
 
   async function copy() {
@@ -44,9 +46,13 @@
   }
 
   async function removePlan() {
-    if (!plan || !confirm(`Eliminare la scheda «${plan.name}»? Lo storico degli allenamenti già fatti non cambia.`)) return
-    await db.plans.delete(plan.id)
-    go('#/schede')
+    if (!plan || !(await ask(`Eliminare la scheda «${plan.name}»? Lo storico degli allenamenti già fatti non cambia.`, { confirmLabel: 'Elimina scheda' }))) return
+    try {
+      await db.plans.delete(plan!.id)
+      go('#/schede')
+    } catch (err) {
+      deleteError = `Non sono riuscito a eliminare la scheda: ${err instanceof Error ? err.message : err}. Riprova.`
+    }
   }
 </script>
 
@@ -85,6 +91,7 @@
       <button onclick={copy}>Duplica scheda</button>
       <button class="del" onclick={removePlan}>Elimina scheda</button>
     </div>
+    {#if deleteError}<p class="err" role="alert">{deleteError}</p>{/if}
   {/if}
 </section>
 
@@ -106,4 +113,5 @@
   .danger { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: 1.5rem; }
   .danger button { border: 1.5px solid var(--text); border-radius: var(--pill); background: transparent; color: var(--text); font-weight: 700; }
   .danger button.del { color: var(--danger); border-color: var(--danger); }
+  .err { color: var(--danger); font-weight: 700; }
 </style>

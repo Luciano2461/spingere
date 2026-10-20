@@ -9,7 +9,7 @@ Diario degli allenamenti in palestra per iPhone: una web app installabile (PWA),
 
 ## Cosa fa
 
-Schede personali (create a mano o importate da CSV, Excel, PDF), registrazione delle serie con recupero a tempo, superserie e circuiti, storico con calendario, record personali, grafici di progressione, mappa dei muscoli allenati, esercizi personalizzati con foto, backup e ripristino in JSON.
+Schede personali (create a mano o importate da CSV, Excel, PDF o convertite con un'AI), registrazione delle serie con recupero a tempo, superserie e circuiti, storico con calendario, record personali, grafici di progressione, mappa dei muscoli allenati, esercizi personalizzati con foto, backup e ripristino in JSON.
 
 ## Sviluppo
 

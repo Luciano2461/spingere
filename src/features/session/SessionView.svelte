@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { ask } from '../../ui/confirm.svelte'
   import { onMount, tick } from 'svelte'
   import { db } from '../../db/db'
   import { discardSession, doneSessions, saveSession } from '../../db/sessions'
   import { fmtDuration, fmtNumber } from '../../domain/format'
   import { blocksOf } from '../../domain/plan'
+  import { isPassed } from '../../domain/rest'
   import { RECORD_LABELS } from '../../domain/records'
   import {
     addEntry, addSet, completeSet, countUndone, currentSet, finishSession, lastTime, removeEntry, removeSet,
@@ -76,7 +78,7 @@
   async function finish() {
     if (!session) return
     if (!sessionHasDoneSets(session)) {
-      if (confirm('Non hai completato nessuna serie. Scartare questo allenamento?')) await discard(false)
+      if (await ask('Non hai completato nessuna serie. Scartare questo allenamento?', { confirmLabel: 'Scarta allenamento' })) await discard(false)
       return
     }
     // sempre una conferma: un allenamento concluso non si può riaprire
@@ -84,16 +86,16 @@
     const question = undone > 0
       ? `Hai ${undone} ${undone === 1 ? 'serie non completata' : 'serie non completate'}: non verranno registrate. Terminare l'allenamento?`
       : 'Terminare l\'allenamento? Dopo non si può riaprire.'
-    if (!confirm(question)) return
+    if (!(await ask(question, { confirmLabel: 'Termina allenamento', danger: false }))) return
     const done = finishSession($state.snapshot(session))
     await saveSession(db, done)
     summary = { session: done, records: sessionRecords(done, history), volume: sessionVolume(done) }
     clearActive()
   }
 
-  async function discard(ask = true) {
+  async function discard(confirmFirst = true) {
     if (!session) return
-    if (ask && !confirm('Eliminare questo allenamento? Quello che hai registrato andrà perso.')) return
+    if (confirmFirst && !(await ask('Eliminare questo allenamento? Quello che hai registrato andrà perso.', { confirmLabel: 'Elimina allenamento' }))) return
     await discardSession(db, session.id)
     clearActive()
     go('#/oggi')
@@ -193,12 +195,14 @@
     {grouped}
     index={i}
     currentIndex={current?.entryIndex === i ? current.setIndex : undefined}
+    passed={isPassed(session!, i, current)}
+    doneTotal={doneCount}
     onset={(si: number, patch: Partial<SetLog>) => commit(updateSetAndFollowers(session!, i, si, patch))}
     ontoggle={(si: number) => toggleSet(i, si)}
     onkind={(si: number, kind: SetKind) => commit(updateSet(session!, i, si, { kind }))}
     onaddset={() => commit(addSet(session!, i))}
     onremoveset={() => commit(removeSet(session!, i, e.sets.length - 1))}
-    onremove={() => confirm(`Togliere «${e.nameSnapshot}» dall'allenamento?`) && commit(removeEntry(session!, i))}
+    onremove={async () => (await ask(`Togliere «${e.nameSnapshot}» dall'allenamento?`, { confirmLabel: 'Togli esercizio' })) && commit(removeEntry(session!, i))}
   />
 {/snippet}
 

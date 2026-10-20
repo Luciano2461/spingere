@@ -67,3 +67,35 @@ export function nextUndone(session: Session, after?: SetRef): SetRef | null {
   const pick = (list: SetRef[]) => list.find((r) => !session.entries[r.entryIndex].sets[r.setIndex].done) ?? null
   return pick(order.slice(start)) ?? pick(order)
 }
+
+/** Ultima serie completata (per orario di completamento), o null. */
+export function lastDone(session: Session): SetRef | null {
+  let best: SetRef | null = null
+  let bestAt = ''
+  session.entries.forEach((e, entryIndex) =>
+    e.sets.forEach((x, setIndex) => {
+      if (x.done && x.doneAt && x.doneAt >= bestAt) {
+        best = { entryIndex, setIndex }
+        bestAt = x.doneAt
+      }
+    }),
+  )
+  return best
+}
+
+/**
+ * Serie da fare adesso: la prima non completata dopo l'ultima completata, così saltare una serie (o farne una in meno)
+ * non riporta indietro. Finito il giro, si torna a quelle rimaste indietro.
+ */
+export function upNext(session: Session): SetRef | null {
+  return nextUndone(session, lastDone(session) ?? undefined)
+}
+
+/** Esercizio lasciato indietro: ha serie non completate, ma la serie corrente è più avanti nell'ordine di esecuzione. */
+export function isPassed(session: Session, entryIndex: number, current: SetRef | null): boolean {
+  if (!current || current.entryIndex === entryIndex) return false
+  const order = executionOrder(session)
+  const at = order.findIndex((r) => r.entryIndex === current.entryIndex && r.setIndex === current.setIndex)
+  const undone = order.flatMap((r, k) => (r.entryIndex === entryIndex && !session.entries[entryIndex].sets[r.setIndex].done ? [k] : []))
+  return undone.length > 0 && undone.every((k) => k < at)
+}

@@ -17,7 +17,7 @@ Dopo la prima apertura l'app funziona anche **offline** (in palestra senza campo
 ## 2. Primi passi
 
 - In **Oggi** puoi provare con la scheda di esempio, allenarti senza scheda o creare la tua scheda.
-- In **Schede** crei le tue schede, oppure le importi da un file CSV, Excel o PDF.
+- In **Schede** crei le tue schede, oppure le importi da un file CSV, Excel o PDF. Se hai la scheda in PDF o in foto, in «Importa una scheda» copia le istruzioni per l'AI, incollale in ChatGPT (o un'altra AI) insieme alla scheda e incolla la risposta nell'app.
 - Durante l'allenamento: segna ogni serie con la spunta, il recupero parte da solo. «Termina» salva l'allenamento.
 - **Calendario** e **Statistiche** mostrano lo storico, i record e i progressi.
 

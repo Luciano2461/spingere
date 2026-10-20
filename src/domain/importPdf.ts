@@ -138,9 +138,9 @@ const isHeaderLine = (l: PdfLine) => {
   return f.filter(Boolean).length >= 3 && f.includes('name')
 }
 
-const COLUMN_ORDER: Field[] = ['plan', 'day', 'name', 'type', 'sets', 'reps', 'seconds', 'weight', 'rest', 'group', 'notes']
+const COLUMN_ORDER: Field[] = ['plan', 'day', 'name', 'nameEn', 'type', 'sets', 'reps', 'seconds', 'weight', 'rest', 'group', 'notes']
 const COLUMN_LABEL: Record<Field, string> = {
-  plan: 'scheda', day: 'giorno', name: 'esercizio', type: 'tipo', sets: 'serie', reps: 'ripetizioni', seconds: 'secondi', weight: 'carico', rest: 'recupero', group: 'superserie', notes: 'note',
+  plan: 'scheda', day: 'giorno', name: 'esercizio', nameEn: 'nome inglese', type: 'tipo', sets: 'serie', reps: 'ripetizioni', seconds: 'secondi', weight: 'carico', rest: 'recupero', group: 'superserie', notes: 'note',
 }
 
 /** Ultima intestazione di giorno (riga con una sola cella) che precede l'indice. */

@@ -54,6 +54,7 @@ writeFileSync(
   JSON.stringify({ datasetVersion: 1, source: 'free-exercise-db (Unlicense)', exercises: out }) + '\n',
 )
 writeFileSync(join(root, 'src/data/synonyms.json'), JSON.stringify(JSON.parse(readFileSync(join(root, 'data/synonyms.it.json'), 'utf8'))) + '\n')
+writeFileSync(join(root, 'src/data/common-names.json'), JSON.stringify(JSON.parse(readFileSync(join(root, 'data/common-names.it.json'), 'utf8'))) + '\n')
 writeFileSync(join(root, 'src/data/muscles.json'), JSON.stringify(muscleIt, null, 1) + '\n')
 writeFileSync(join(root, 'src/data/equipment.json'), JSON.stringify(equipIt, null, 1) + '\n')
 

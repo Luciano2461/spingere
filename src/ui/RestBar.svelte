@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fmtDuration } from '../domain/format'
-  import { adjustRest, isRestOver, nextUndone, remainingSeconds } from '../domain/rest'
+  import { adjustRest, isRestOver, remainingSeconds, upNext } from '../domain/rest'
   import { playRestEnd } from '../services/audio'
   import { active, commitSession } from '../state/activeSession.svelte'
   import { soundEnabled } from '../state/settings.svelte'
@@ -12,7 +12,7 @@
   const progress = $derived(rest && !over ? Math.min(1, Math.max(0, 1 - left / rest.durationSeconds)) : 1)
   const next = $derived.by(() => {
     const s = active.session
-    const n = s ? nextUndone(s) : null
+    const n = s ? upNext(s) : null
     return s && n ? `${s.entries[n.entryIndex].nameSnapshot} · serie ${n.setIndex + 1}` : null
   })
 

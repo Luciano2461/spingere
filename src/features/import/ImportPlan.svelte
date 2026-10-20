@@ -3,10 +3,11 @@
   import { db } from '../../db/db'
   import { applyImport } from '../../db/importPlan'
   import synonyms from '../../data/synonyms.json'
+  import commonNames from '../../data/common-names.json'
   import { TYPE_LABELS } from '../../data/labels'
   import { fmtNumber } from '../../domain/format'
   import {
-    buildImport, buildReview, guessType, tableToRows, templateCsv,
+    aiInstructions, buildImport, buildReview, guessType, pastedTable, tableToRows, templateCsv,
     type Choice, type ImportRow, type ReviewItem,
   } from '../../domain/importPlan'
   import type { Exercise, ExerciseType } from '../../domain/types'
@@ -57,32 +58,69 @@
       if (isPdf) {
         const parsed = parsePdfPages(await extractPdfPages(file))
         if (!parsed.hasText) {
-          error = 'Questo PDF non contiene testo (sembra una scansione o una foto). Per ora usa il template CSV o un PDF con testo selezionabile; la lettura di foto e scansioni arriverà più avanti.'
+          error = 'Questo PDF non contiene testo (sembra una scansione o una foto). Fallo convertire da un\'AI con le istruzioni qui sotto, oppure usa il template CSV.'
           return
         }
         table = parsed.table
         notes = parsed.unrecognized.slice(0, 8).map((u) => `Pagina ${u.page}: «${u.text.length > 70 ? u.text.slice(0, 70) + '…' : u.text}» non riconosciuta, ignorata.`)
         if (parsed.unrecognized.length > 8) notes.push(`…e altre ${parsed.unrecognized.length - 8} righe non riconosciute.`)
       } else table = await readTable(file)
-      fromPdf = isPdf
-      const { rows, problems: p } = tableToRows(table)
-      problems = [...p, ...notes]
-      if (rows.length === 0) {
-        error = p[0] ?? 'Nessun esercizio trovato nel file.'
-        if (isPdf) error += ' Se il PDF è una grafica o ha un formato insolito, usa il template CSV.'
-        return
-      }
-      const aliases = new Map<string, string[]>()
-      for (const a of aliasRows) aliases.set(a.exerciseId, [...(aliases.get(a.exerciseId) ?? []), a.text])
-      items = buildReview(rows, exercises, { synonyms, aliases })
-      planNames = Object.fromEntries([...new Set(rows.map((r) => r.planName))].map((n) => [n, n]))
-      fileName = file.name
-      openEdit = null
-      stage = 'review'
+      if (!review(table, file.name, isPdf, notes) && isPdf) error += ' Se il PDF è una grafica o ha un formato insolito, usa il template CSV.'
     } catch (e) {
       error = e instanceof ImportFileError ? e.message : 'Non riesco a leggere il file.'
     } finally {
       busy = false
+    }
+  }
+
+  /** Dalla tabella letta alla schermata di revisione. false se non c'è nulla da importare (l'errore è in `error`). */
+  function review(table: string[][], name: string, isPdf: boolean, notes: string[] = []): boolean {
+    fromPdf = isPdf
+    const { rows, problems: p } = tableToRows(table)
+    problems = [...p, ...notes]
+    if (rows.length === 0) {
+      error = p[0] ?? 'Nessun esercizio trovato nel file.'
+      return false
+    }
+    const aliases = new Map<string, string[]>()
+    for (const a of aliasRows) aliases.set(a.exerciseId, [...(aliases.get(a.exerciseId) ?? []), a.text])
+    items = buildReview(rows, exercises, { synonyms, aliases, commonNames })
+    planNames = Object.fromEntries([...new Set(rows.map((r) => r.planName))].map((n) => [n, n]))
+    fileName = name
+    openEdit = null
+    stage = 'review'
+    return true
+  }
+
+  // --- conversione con un'AI: istruzioni da copiare, risposta da incollare ---
+  const instructions = aiInstructions()
+  let copied = $state('')
+  let pasted = $state('')
+  let pasteError = $state('')
+
+  async function copyInstructions() {
+    try {
+      await navigator.clipboard.writeText(instructions)
+      copied = 'Istruzioni copiate: incollale nella chat dell\'AI insieme alla tua scheda.'
+    } catch {
+      copied = 'Non riesco a copiare in automatico: apri «Vedi le istruzioni», tieni premuto sul testo e scegli Copia.'
+    }
+  }
+
+  async function shareInstructions() {
+    try {
+      await navigator.share({ text: instructions })
+    } catch {
+      // annullato dall'utente: niente da fare
+    }
+  }
+
+  function readPasted() {
+    pasteError = ''
+    if (!pasted.trim()) return
+    if (!review(pastedTable(pasted), 'testo incollato', false)) {
+      pasteError = `${error} Controlla di aver incollato tutta la risposta, a partire dalla riga delle intestazioni.`
+      error = ''
     }
   }
 
@@ -162,6 +200,9 @@
     }
   }
 
+  /** Nome italiano e, se diverso, quello inglese: aiuta a scegliere quando la scheda usa i nomi inglesi. */
+  const optionLabel = (e: Exercise) => (e.nameOriginal && e.nameOriginal !== e.name ? `${e.name} · ${e.nameOriginal}` : e.name)
+
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 </script>
 
@@ -172,16 +213,34 @@
   {#if stage === 'pick'}
     <p>Carica un file <strong>CSV</strong>, <strong>Excel (.xlsx)</strong> o un <strong>PDF con testo</strong> con la tua scheda. Prima di salvare potrai controllare e correggere ogni esercizio.</p>
 
-    <button class="big primary" onclick={downloadTemplate}>Scarica il template (CSV)</button>
-    <label class="big file" class:disabled={busy}>
+    <button class="big" onclick={downloadTemplate}>Scarica il template (CSV)</button>
+    <label class="big primary file" class:disabled={busy}>
       {busy ? 'Lettura in corso…' : 'Scegli il file'}
       <input type="file" accept=".csv,.xlsx,.pdf,.txt,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange={onFile} disabled={busy} />
     </label>
     {#if error}<p class="err" role="alert">{error}</p>{/if}
 
+    <h2>Scheda in PDF o in foto? Falla convertire da un'AI</h2>
+    <ol class="help">
+      <li>Copia le istruzioni qui sotto.</li>
+      <li>Apri un'intelligenza artificiale (ChatGPT, Claude, Gemini…), incolla le istruzioni e allega la tua scheda (PDF, foto o testo).</li>
+      <li>Copia la risposta (il CSV) e incollala nel riquadro qui sotto, oppure salvala come file <code>.csv</code> e caricala con «Scegli il file».</li>
+    </ol>
+    <button class="big primary" onclick={copyInstructions}>Copia le istruzioni per l'AI</button>
+    {#if typeof navigator !== 'undefined' && 'share' in navigator}<button class="big" onclick={shareInstructions}>Condividi le istruzioni…</button>{/if}
+    {#if copied}<p class="muted" role="status">{copied}</p>{/if}
+    <details>
+      <summary>Vedi le istruzioni</summary>
+      <pre class="instructions">{instructions}</pre>
+    </details>
+    <textarea class="paste" rows="5" bind:value={pasted} placeholder="Incolla qui il CSV ricevuto dall'AI" aria-label="CSV incollato"></textarea>
+    <button class="big" onclick={readPasted} disabled={!pasted.trim()}>Leggi il testo incollato</button>
+    {#if pasteError}<p class="err" role="alert">{pasteError}</p>{/if}
+    <p class="muted">La scheda che alleghi all'AI viene inviata a quel servizio: Spingere invece non invia nulla.</p>
+
     <h2>Come compilare il file</h2>
     <ul class="help">
-      <li>Una riga per esercizio. Colonne: <code>scheda, giorno, esercizio, tipo, serie, ripetizioni, secondi, carico, recupero, superserie, note</code>. Solo «esercizio» è obbligatoria.</li>
+      <li>Una riga per esercizio. Colonne: <code>scheda, giorno, esercizio, nome inglese, tipo, serie, ripetizioni, secondi, carico, recupero, superserie, note</code>. Solo «esercizio» è obbligatoria; il nome inglese, se c'è, aiuta a riconoscere l'esercizio.</li>
       <li>Se «scheda» o «giorno» sono vuoti valgono quelli della riga sopra.</li>
       <li>Recupero: <code>90</code>, <code>90s</code>, <code>1:30</code> o <code>2 min</code>. Carico in kg (anche <code>12,5</code>). Ripetizioni come <code>8-10</code> valgono 10.</li>
       <li>Superserie: righe consecutive con la stessa lettera (A, B…) formano una superserie; scrivi «circuito 1» per un circuito.</li>
@@ -221,9 +280,9 @@
               <p class="muted">{summary(it.row, t)}</p>
 
               <select value={selectValue(it.choice)} onchange={(e) => onSelect(i, e.currentTarget.value, e)} aria-label={`Esercizio per «${it.row.name}»`}>
-                {#each it.match.candidates as c (c.id)}<option value={`e:${c.id}`}>{c.name}</option>{/each}
+                {#each it.match.candidates as c (c.id)}<option value={`e:${c.id}`}>{optionLabel(c)}</option>{/each}
                 {#if it.choice.kind === 'exercise' && !it.match.candidates.some((c) => c.id === (it.choice as { exercise: Exercise }).exercise.id)}
-                  <option value={`e:${it.choice.exercise.id}`}>{it.choice.exercise.name}</option>
+                  <option value={`e:${it.choice.exercise.id}`}>{optionLabel(it.choice.exercise)}</option>
                 {/if}
                 <option value="custom">Nuovo esercizio personalizzato «{it.row.name}»</option>
                 <option value="skip">Salta questa riga</option>
@@ -292,6 +351,11 @@
   .file input { display: none; }
   .file.disabled { opacity: .5; }
   .err { color: var(--danger); }
+  details { margin-top: .6rem; }
+  summary { min-height: 44px; line-height: 44px; font-weight: 700; cursor: pointer; }
+  .instructions { white-space: pre-wrap; font-family: var(--mono); font-size: .75rem; background: var(--surface); padding: .7rem; margin: 0; -webkit-user-select: text; user-select: text; }
+  .paste { width: 100%; margin-top: .8rem; padding: .6rem .8rem; font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); resize: vertical; }
+  .big:disabled { opacity: .5; }
   .help { padding-left: 1.1rem; display: grid; gap: .4rem; font-size: .9rem; }
   code { font-size: .8rem; background: var(--surface); padding: 1px 4px; border-radius: 0; word-break: break-word; }
   .warn { background: color-mix(in srgb, var(--warn) 15%, var(--bg)); border: 1px solid var(--warn); border-radius: var(--r); padding: .5rem .8rem; font-size: .85rem; }

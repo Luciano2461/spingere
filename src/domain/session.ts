@@ -1,6 +1,6 @@
 import { newPlanExercise } from './plan'
 import { recordsFor, type RecordKind } from './records'
-import { nextUndone, restSecondsFor, startRest } from './rest'
+import { restSecondsFor, startRest, upNext } from './rest'
 import { totalVolume } from './stats'
 import type { Exercise, ExerciseType, Plan, PlanDay, PlanExercise, Session, SessionEntry, SetKind, SetLog } from './types'
 
@@ -146,9 +146,9 @@ export function updateSetAndFollowers(s: Session, entryIndex: number, setIndex: 
   return next
 }
 
-/** Prima serie non completata nell'ordine di esecuzione (la «serie corrente»): nelle superserie si alterna A1 B1 A2 B2, come «Prossimo» nella barra del recupero. */
+/** Serie corrente: la prossima non completata dopo l'ultima fatta (nelle superserie si alterna A1 B1 A2 B2), come «Prossimo» nella barra del recupero. */
 export function currentSet(s: Session): { entryIndex: number; setIndex: number } | null {
-  return nextUndone(s)
+  return upNext(s)
 }
 
 /** Segna la serie come completata/da fare. */

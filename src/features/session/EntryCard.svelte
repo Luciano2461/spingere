@@ -11,7 +11,7 @@
   import ExerciseImages from '../ExerciseImages.svelte'
 
   let {
-    entry, last, records, weightStep, grouped = false, currentIndex, exercise, index,
+    entry, last, records, weightStep, grouped = false, currentIndex, exercise, index, passed = false, doneTotal = 0,
     onset, ontoggle, onkind, onaddset, onremoveset, onremove,
   }: {
     entry: SessionEntry
@@ -22,6 +22,8 @@
     currentIndex?: number // serie da fare adesso (evidenziata)
     exercise?: Exercise // se presente, toccando il nome si vedono le immagini o la foto
     index?: number // posizione nell'allenamento, mostrata come «01», «02»
+    passed?: boolean // esercizio lasciato indietro con serie non fatte: si chiude come uno completato
+    doneTotal?: number // serie completate in tutto l'allenamento: quando cambia, un esercizio riaperto può richiudersi
     onset: (setIndex: number, patch: Partial<SetLog>) => void
     ontoggle?: (setIndex: number) => void // assente: nessun pulsante di completamento (serie già concluse)
     onkind: (setIndex: number, kind: SetKind) => void
@@ -45,16 +47,22 @@
 
   const doneCount = $derived(entry.sets.filter((x) => x.done).length)
   // esercizio concluso (solo durante l'allenamento): si riduce a una riga per tenere in vista quello che resta
-  const collapsed = $derived(!!ontoggle && !reopened && entry.sets.length > 0 && doneCount === entry.sets.length && currentIndex === undefined)
+  const collapsed = $derived(!!ontoggle && !reopened && doneCount > 0 && (doneCount === entry.sets.length || passed) && currentIndex === undefined)
+  const undoneCount = $derived(entry.sets.length - doneCount)
+  // riaperto per correggere: si richiude appena si completa un'altra serie
+  $effect(() => {
+    void doneTotal
+    reopened = false
+  })
   const lastText = $derived(
     last ? fmtSetsGrouped(entry.type, last.entry.sets.filter((s) => s.done)) : '',
   )
 </script>
 
 {#if collapsed}
-  <button class="card compact" class:grouped onclick={() => (reopened = true)} aria-label={`${entry.nameSnapshot}: completato. Tocca per riaprire`}>
+  <button class="card compact" class:grouped onclick={() => (reopened = true)} aria-label={`${entry.nameSnapshot}: ${undoneCount ? `${undoneCount} ${undoneCount === 1 ? 'serie non fatta' : 'serie non fatte'}` : 'completato'}. Tocca per riaprire`}>
     <span class="cname">{#if index !== undefined}<span class="cnum">{String(index + 1).padStart(2, '0')}</span>{/if}{entry.nameSnapshot}</span>
-    <span class="csum">✓ {fmtSetsGrouped(entry.type, entry.sets)}</span>
+    <span class="csum">✓ {fmtSetsGrouped(entry.type, entry.sets.filter((x) => x.done))}{#if undoneCount}<span class="cskip">&nbsp;· {undoneCount} non {undoneCount === 1 ? 'fatta' : 'fatte'}</span>{/if}</span>
   </button>
 {:else}
 <div class="card" class:grouped>
@@ -142,6 +150,7 @@
   .cname { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -.02em; }
   .cnum { font-family: var(--mono); font-weight: 400; font-size: .7rem; color: var(--muted); margin-right: .5rem; }
   .csum { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+  .cskip { color: var(--danger); }
   .head { display: flex; align-items: flex-start; gap: .25rem; }
   .titles { flex: 1; display: grid; min-width: 0; }
   .name { text-align: left; padding: 0; min-height: 32px; border: 0; background: transparent; font: inherit; font-size: 1.2rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; color: var(--text); }

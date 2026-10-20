@@ -1,5 +1,6 @@
 <script lang="ts">
   import Banners from './ui/Banners.svelte'
+  import ConfirmHost from './ui/ConfirmHost.svelte'
   import RestBar from './ui/RestBar.svelte'
   import { active } from './state/activeSession.svelte'
   import { disableWakeLock, enableWakeLock } from './services/wakeLock.svelte'
@@ -75,6 +76,7 @@
 </main>
 <RestBar />
 <TabBar />
+<ConfirmHost />
 
 <style>
   main.resting { padding-bottom: calc(var(--dock) + 6.5rem); }

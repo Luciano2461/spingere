@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ask } from '../../ui/confirm.svelte'
   import { onMount } from 'svelte'
   import { liveQuery } from 'dexie'
   import { db } from '../../db/db'
@@ -47,8 +48,8 @@
   const typeOf = (e: PlanExercise) => exercises.get(e.exerciseId)?.type ?? 'weight_reps'
   const patch = (i: number, p: Partial<PlanExercise>) => day && setDay(updateExercise(day, i, p))
 
-  function remove(i: number) {
-    if (day && confirm(`Togliere «${day.exercises[i].nameSnapshot}» da questo giorno?`)) setDay(removeExercise(day, i))
+  async function remove(i: number) {
+    if (day && (await ask(`Togliere «${day.exercises[i].nameSnapshot}» da questo giorno?`, { confirmLabel: 'Togli esercizio' }))) setDay(removeExercise(day!, i))
   }
 
   const groupOf = (id: string) => day?.groups.find((g) => g.id === id)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adjustRest, executionOrder, isRestOver, isStaleRest, nextUndone, remainingSeconds, restSecondsFor, startRest } from './rest'
+import { adjustRest, executionOrder, isPassed, isRestOver, isStaleRest, lastDone, nextUndone, remainingSeconds, restSecondsFor, startRest, upNext } from './rest'
 import type { Session, SessionEntry, SetLog } from './types'
 
 const set = (p: Partial<SetLog> = {}): SetLog => ({ kind: 'normal', done: false, ...p })
@@ -88,5 +88,29 @@ describe('ordine di esecuzione', () => {
     expect(nextUndone(t, { entryIndex: 1, setIndex: 0 })).toEqual({ entryIndex: 0, setIndex: 0 })
     t.entries[0].sets[0].done = true
     expect(nextUndone(t)).toBeNull()
+  })
+})
+
+describe('serie da fare adesso', () => {
+  const at = (min: number) => new Date(Date.UTC(2026, 9, 19, 10, min)).toISOString()
+  it('saltare una serie non riporta indietro: si prosegue dopo l\'ultima completata', () => {
+    const t = session([entry('a', 3), entry('b', 2)])
+    t.entries[0].sets[0] = { ...t.entries[0].sets[0], done: true, doneAt: at(1) }
+    t.entries[0].sets[1] = { ...t.entries[0].sets[1], done: true, doneAt: at(3) }
+    t.entries[1].sets[0] = { ...t.entries[1].sets[0], done: true, doneAt: at(6) }
+    expect(lastDone(t)).toEqual({ entryIndex: 1, setIndex: 0 })
+    expect(upNext(t)).toEqual({ entryIndex: 1, setIndex: 1 })
+    expect(isPassed(t, 0, upNext(t))).toBe(true)
+    expect(isPassed(t, 1, upNext(t))).toBe(false)
+  })
+  it('finito il giro torna alle serie rimaste indietro', () => {
+    const t = session([entry('a', 2), entry('b', 1)])
+    t.entries[0].sets[0] = { ...t.entries[0].sets[0], done: true, doneAt: at(1) }
+    t.entries[1].sets[0] = { ...t.entries[1].sets[0], done: true, doneAt: at(4) }
+    expect(upNext(t)).toEqual({ entryIndex: 0, setIndex: 1 })
+    expect(isPassed(t, 0, upNext(t))).toBe(false)
+  })
+  it('senza serie completate parte dalla prima', () => {
+    expect(upNext(session([entry('a', 2)]))).toEqual({ entryIndex: 0, setIndex: 0 })
   })
 })

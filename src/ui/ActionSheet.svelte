@@ -8,7 +8,7 @@
     onclick: () => void
   }
 
-  let { title, actions, onclose }: { title?: string; actions: SheetAction[]; onclose: () => void } = $props()
+  let { title, message, actions, onclose }: { title?: string; message?: string; actions: SheetAction[]; onclose: () => void } = $props()
 
   function pick(a: SheetAction) {
     a.onclick() // prima dell'azione: chiudere il foglio può azzerare lo stato da cui dipende
@@ -18,8 +18,9 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="overlay" onclick={(e) => e.target === e.currentTarget && onclose()}>
-  <div class="sheet" role="dialog" aria-modal="true" aria-label={title ?? 'Azioni'}>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label={title ?? message ?? 'Azioni'}>
     {#if title}<p class="title">{title}</p>{/if}
+    {#if message}<p class="message">{message}</p>{/if}
     {#each actions as a}
       <button class="act" class:danger={a.danger} class:selected={a.selected} disabled={a.disabled} onclick={() => pick(a)}>
         <span class="label">{a.label}{#if a.selected} <span aria-hidden="true">✓</span>{/if}</span>
@@ -37,6 +38,7 @@
     border-radius: 0; padding: .9rem; padding-bottom: calc(.9rem + env(safe-area-inset-bottom));
   }
   .title { margin: 0 0 .3rem; font-family: var(--mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  .message { margin: 0 0 .6rem; font-size: 1rem; line-height: 1.4; color: var(--text); }
   .act {
     display: grid; gap: .1rem; text-align: left; min-height: 52px; padding: .5rem .9rem;
     background: var(--surface); border: 0; border-radius: 0; color: var(--text);

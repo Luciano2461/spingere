@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ask } from '../../ui/confirm.svelte'
   import { db } from '../../db/db'
   import { discardSession, saveSession } from '../../db/sessions'
   import { fmtDuration, fmtNumber, fmtSet } from '../../domain/format'
@@ -75,7 +76,7 @@
   }
 
   async function remove() {
-    if (!session || !confirm('Eliminare questo allenamento? Sparirà dallo storico, dai record e dalle statistiche. L\'operazione non si può annullare.')) return
+    if (!session || !(await ask('Eliminare questo allenamento? Sparirà dallo storico, dai record e dalle statistiche. L\'operazione non si può annullare.', { confirmLabel: 'Elimina allenamento' }))) return
     const back = backHref
     await discardSession(db, session.id)
     go(back)
@@ -110,9 +111,9 @@
             onset={(si, patch) => setDraft(updateSet(draft!, i, si, patch))}
             onkind={(si, kind) => setDraft(updateSet(draft!, i, si, { kind }))}
             onaddset={() => setDraft(addDoneSet(draft!, i))}
-            onremoveset={() => {
+            onremoveset={async () => {
               const n = draft!.entries[i].sets.length
-              if (n > 0 && (n > 1 || confirm(`Era l'unica serie di «${entry.nameSnapshot}»: l'esercizio verrà tolto dall'allenamento. Continuare?`))) setDraft(removeDoneSet(draft!, i, n - 1))
+              if (n > 0 && (n > 1 || (await ask(`Era l'unica serie di «${entry.nameSnapshot}»: l'esercizio verrà tolto dall'allenamento. Continuare?`, { confirmLabel: 'Togli esercizio' })))) setDraft(removeDoneSet(draft!, i, n - 1))
             }}
           />
         {/each}
