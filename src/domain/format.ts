@@ -1,8 +1,10 @@
 import type { ExerciseType, SetLog } from './types'
 
-/** 77.5 → "77,5" (formato italiano, senza zeri inutili). */
+/** 77.5 → "77,5", 101264 → "101.264" (formato italiano, senza zeri inutili). Niente Intl: il raggruppamento di it-IT cambia tra versioni di iOS. */
 export function fmtNumber(n: number): string {
-  return String(Math.round(n * 100) / 100).replace('.', ',')
+  const [int, dec] = String(Math.abs(Math.round(n * 100) / 100)).split('.')
+  const grouped = int.replace(/\B(?=(\d{3})+$)/g, '.')
+  return (n < 0 && (int !== '0' || dec) ? '-' : '') + grouped + (dec ? ',' + dec : '')
 }
 
 /** 3725 → "1:02:05", 125 → "2:05". */

@@ -4,9 +4,11 @@
   import { db } from '../db/db'
   import { isStandalone, requestPersistence, storageUsage } from '../services/storage'
   import { cacheAllImages, cachedImageCount } from '../services/assetCache'
-  import { playRestEnd, unlockAudio } from '../services/audio'
+  import { canIgnoreSilent, playCountdownDemo, playCue, unlockAudio, type CueOptions } from '../services/audio'
   import { wakeLockState } from '../services/wakeLock.svelte'
-  import { appSettings, soundEnabled, updateSettings, weightStep } from '../state/settings.svelte'
+  import { SOUND_STYLES, VOLUMES, soundPrefs } from '../domain/restCues'
+  import type { RestSoundStyle, RestVolume, Settings } from '../domain/types'
+  import { appSettings, restSoundPrefs, updateSettings, weightStep } from '../state/settings.svelte'
   import Stepper from '../ui/Stepper.svelte'
 
   let persisted = $state<boolean | null>(null)
@@ -17,14 +19,24 @@
   let error = $state('')
   const standalone = isStandalone()
   let soundMsg = $state('')
+  const sound = $derived(restSoundPrefs())
+  const silentSupported = canIgnoreSilent()
+  const STYLE_LABELS: Record<RestSoundStyle, string> = { classic: 'Classico', gong: 'Gong', triple: 'Tre bip' }
+  const VOLUME_LABELS: Record<RestVolume, string> = { low: 'Basso', medium: 'Medio', high: 'Alto' }
 
-  function testSound() {
+  function test(play: (opts: CueOptions) => boolean, opts: CueOptions = sound) {
     unlockAudio() // dentro il tocco: su iOS è l'unico modo per sbloccare l'audio
     setTimeout(() => {
-      soundMsg = playRestEnd()
-        ? 'Hai sentito i tre bip? Se no: alza il volume e controlla che l\'interruttore laterale dell\'iPhone non sia su «Silenzioso».'
+      soundMsg = play(opts)
+        ? `Non si sente? Alza il volume${opts.ignoreSilent ? '' : ' e controlla che l\'interruttore laterale dell\'iPhone non sia su «Silenzioso»'}.`
         : 'Audio non disponibile su questo dispositivo: resta il segnale visivo.'
     }, 80)
+  }
+
+  /** Cambia suono o volume e lo fa sentire subito. */
+  function pick(patch: Partial<Settings>) {
+    updateSettings(patch)
+    test((o) => playCue('end', o), soundPrefs({ ...appSettings, ...patch }))
   }
 
   onMount(() => {
@@ -81,11 +93,42 @@
   <ul>
     <li>
       <label class="switch">
-        <input type="checkbox" checked={soundEnabled()} onchange={(e) => updateSettings({ restSound: e.currentTarget.checked })} />
+        <input type="checkbox" checked={sound.enabled} onchange={(e) => updateSettings({ restSound: e.currentTarget.checked })} />
         <span>Suono a fine recupero</span>
       </label>
-      <button onclick={testSound}>Prova il suono</button>
-      {#if soundMsg}<span class="muted small">{soundMsg}</span>{/if}
+      {#if sound.enabled}
+        <span>Suono</span>
+        <div class="seg">
+          {#each SOUND_STYLES as v}
+            <button class:on={sound.style === v} aria-pressed={sound.style === v} onclick={() => pick({ restSoundStyle: v })}>{STYLE_LABELS[v]}</button>
+          {/each}
+        </div>
+        <span>Volume</span>
+        <div class="seg">
+          {#each VOLUMES as v}
+            <button class:on={sound.volume === v} aria-pressed={sound.volume === v} onclick={() => pick({ restVolume: v })}>{VOLUME_LABELS[v]}</button>
+          {/each}
+        </div>
+        <label class="switch">
+          <input type="checkbox" checked={sound.countdown} onchange={(e) => updateSettings({ restCountdown: e.currentTarget.checked })} />
+          <span>Preavviso: un bip a 10 secondi dalla fine, poi 3, 2, 1</span>
+        </label>
+        {#if silentSupported}
+          <label class="switch">
+            <input type="checkbox" checked={sound.ignoreSilent} onchange={(e) => updateSettings({ restIgnoreSilent: e.currentTarget.checked })} />
+            <span>Suona anche col Silenzioso</span>
+          </label>
+          <span class="muted small">Quando suona, la musica di altre app (es. Spotify) si ferma e va fatta ripartire a mano.</span>
+        {:else}
+          <span class="muted small">Con l'interruttore laterale dell'iPhone su «Silenzioso» non si sente: qui un'app web non può evitarlo (serve iOS 17 o successivo).</span>
+        {/if}
+        <div class="row">
+          <button onclick={() => test((o) => playCue('end', o))}>Prova il suono</button>
+          {#if sound.countdown}<button onclick={() => test(playCountdownDemo)}>Prova il preavviso</button>{/if}
+        </div>
+        {#if soundMsg}<span class="muted small">{soundMsg}</span>{/if}
+        <span class="muted small">Con lo schermo bloccato o l'app chiusa iOS ferma l'app: il suono arriva solo con l'app aperta.</span>
+      {/if}
     </li>
     <li>
       <Stepper label="Recupero predefinito" unit="sec" step={15} min={15} value={appSettings.defaultRestSeconds} onchange={(v) => updateSettings({ defaultRestSeconds: v })} />
@@ -154,4 +197,6 @@
   .switch input { width: 22px; height: 22px; accent-color: var(--accent); }
   .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
   .seg button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .seg button, .row button { min-height: 44px; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; }
 </style>

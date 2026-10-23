@@ -1,9 +1,15 @@
+<script module lang="ts">
+  // Segnali già suonati: a livello di modulo, così cambiare schermata durante il recupero non li fa ripetere.
+  const played = new Set<string>()
+</script>
+
 <script lang="ts">
   import { fmtDuration } from '../domain/format'
   import { adjustRest, isRestOver, remainingSeconds, upNext } from '../domain/rest'
-  import { playRestEnd } from '../services/audio'
+  import { cueKey, dueCue, restCues } from '../domain/restCues'
+  import { playCue } from '../services/audio'
   import { active, commitSession } from '../state/activeSession.svelte'
-  import { soundEnabled } from '../state/settings.svelte'
+  import { restSoundPrefs } from '../state/settings.svelte'
 
   let now = $state(Date.now())
   const rest = $derived(active.session?.rest ?? null)
@@ -29,12 +35,15 @@
     }
   })
 
-  // Segnale di fine recupero: una volta sola per timer, e solo se la fine è appena avvenuta (non se si riapre l'app molto dopo).
-  let signalled = ''
+  // Segnali sonori (preavviso, 3-2-1, fine): ognuno una volta sola, e solo se è appena scattato (non se si riapre l'app molto dopo).
+  const prefs = $derived(restSoundPrefs())
+  const cues = $derived(rest && prefs.enabled ? restCues(rest, prefs.countdown) : [])
   $effect(() => {
-    if (!rest || !over || signalled === rest.endsAt) return
-    signalled = rest.endsAt
-    if (now - new Date(rest.endsAt).getTime() < 3000 && soundEnabled()) playRestEnd()
+    const cue = dueCue(cues, now, played)
+    if (!cue) return
+    if (played.size > 200) played.clear()
+    played.add(cueKey(cue))
+    playCue(cue.kind, prefs)
   })
 
   const adjust = (delta: number) => active.session && rest && commitSession({ ...active.session, rest: adjustRest(rest, delta) })

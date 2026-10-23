@@ -119,6 +119,9 @@ export interface PersonalPhoto {
   blob: Blob
 }
 
+export type RestSoundStyle = 'classic' | 'gong' | 'triple'
+export type RestVolume = 'low' | 'medium' | 'high'
+
 export interface Settings {
   id: 'settings'
   increments: number[]
@@ -126,6 +129,10 @@ export interface Settings {
   backupReminderDays: number
   theme: 'system' | 'light' | 'dark'
   restSound?: boolean // suono a fine recupero (se assente: sì)
+  restSoundStyle?: RestSoundStyle // se assente: classic
+  restVolume?: RestVolume // se assente: high
+  restCountdown?: boolean // preavviso a 10 s e 3-2-1 (se assente: sì)
+  restIgnoreSilent?: boolean // suona anche con l'interruttore Silenzioso, dove iOS lo permette (se assente: no)
   weightStep?: number // passo dei pulsanti −/+ del carico (se assente: 2,5 kg)
   lastBackupAt?: string
 }

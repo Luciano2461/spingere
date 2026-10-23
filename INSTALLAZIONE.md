@@ -24,7 +24,7 @@ Dopo la prima apertura l'app funziona anche **offline** (in palestra senza campo
 ## 3. Consigli per la palestra
 
 - **Schermo acceso:** l'app prova a tenerlo acceso durante l'allenamento, ma su alcune versioni di iOS non ci riesce. In quel caso imposta *Impostazioni dell'iPhone → Schermo e luminosità → Blocco automatico → Mai* mentre ti alleni.
-- **Suono di fine recupero:** non si sente se l'iPhone è in **modalità silenziosa** o se lo schermo è bloccato. Resta sempre il segnale visivo.
+- **Suono di fine recupero:** con lo schermo bloccato non si sente. Con l'iPhone in **modalità silenziosa** non si sente, a meno di attivare «Suona anche col Silenzioso» in Impostazioni (da iOS 17; quando suona, la musica di altre app si ferma). Suono, volume e preavviso (10 secondi e 3-2-1) si scelgono in Impostazioni. Resta sempre il segnale visivo.
 - **Notifiche:** l'app non manda notifiche (iOS non lo permette a queste app senza un server).
 
 ## 4. Proteggi i tuoi dati: fai il backup

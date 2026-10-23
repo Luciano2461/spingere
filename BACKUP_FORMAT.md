@@ -89,7 +89,7 @@ Muscoli e attrezzi usano le chiavi inglesi di free-exercise-db (`chest`, `lats`,
 - Le foto sono ridimensionate a 800 px (JPEG) e codificate in base64 **senza** prefisso `data:`.
 
 ### Settings
-`increments` (numeri), `defaultRestSeconds`, `backupReminderDays` (0 = mai), `theme` (`system|light|dark`), `restSound` (opzionale, assente = sì), `weightStep` (opzionale, assente = 2,5).
+`increments` (numeri), `defaultRestSeconds`, `backupReminderDays` (0 = mai), `theme` (`system|light|dark`), `restSound` (opzionale, assente = sì), `restSoundStyle` (opzionale, `classic|gong|triple`, assente = `classic`), `restVolume` (opzionale, `low|medium|high`, assente = `high`), `restCountdown` (opzionale, assente = sì), `restIgnoreSilent` (opzionale, assente = no), `weightStep` (opzionale, assente = 2,5). Un valore non valido di questi campi viene trattato come assente.
 
 ## Importazione
 
